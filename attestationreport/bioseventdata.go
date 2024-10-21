@@ -329,76 +329,76 @@ func bytesToString(uint8Array []uint8) string {
 
 func parseUefiVariableData(buf *bytes.Buffer) *UefiVariableData {
 
-	if buf.Len() >= 32 {
-		uefiVariableData := new(UefiVariableData)
-		var unicodeNameLength, variableDataLength uint64
+	if buf.Len() < 32 {
+		return nil
+	}
+	uefiVariableData := new(UefiVariableData)
+	var unicodeNameLength, variableDataLength uint64
 
-		//1. Part: read binary data into variables
-		variableName := readGUID(buf)
-		binary.Read(buf, binary.LittleEndian, &unicodeNameLength)
-		binary.Read(buf, binary.LittleEndian, &variableDataLength)
+	//1. Part: read binary data into variables
+	variableName := readGUID(buf)
+	binary.Read(buf, binary.LittleEndian, &unicodeNameLength)
+	binary.Read(buf, binary.LittleEndian, &variableDataLength)
 
-		//read the amount of data into the []data fields
+	//read the amount of data into the []data fields
 
-		if buf.Len() < 2*int(unicodeNameLength) {
-			// return output
-			log.Error("incomplete UEFI Variable Data field")
-			return uefiVariableData
-		}
-
-		unicodeNameBuf := make([]uint16, unicodeNameLength)
-		binary.Read(buf, binary.LittleEndian, &unicodeNameBuf)
-		unicodeName := string(utf16.Decode(unicodeNameBuf))
-
-		if buf.Len() < int(variableDataLength) {
-			//just stop reading
-			log.Error("incomplete UEFI Variable Data field")
-			return uefiVariableData
-		}
-
-		//2. Part: put data into struct
-		uefiVariableData.VariableNameGUID = variableName
-		uefiVariableData.UnicodeName = unicodeName
-
-		//parse data of UEFI var
-		switch unicodeName {
-		case "PK", "KEK", "db", "dbr", "dbt", "dbx", "PKDefault", "KEKDefault", "dbDefault", "dbrDefault", "dbtDefault", "dbxDefault":
-			uefiVariableData.Signaturedb = parseEFISignaturedb(buf, int(variableDataLength))
-		case "BootOrder":
-			uefiVariableData.BootOrder = parseEFIBootOrder(buf, int(variableDataLength))
-		case "DriverOrder":
-			uefiVariableData.DriverOrder = parseEFIBootOrder(buf, int(variableDataLength))
-		case "BootNext":
-			uefiVariableData.BootNext = *parseSingleUint16(buf)
-		case "BootCurrent":
-			uefiVariableData.BootCurrent = *parseSingleUint16(buf)
-		case "BootOptionSupport":
-			uefiVariableData.BootOptionSupport = *parseSingleUint32(buf)
-		case "SignatureSupport", "OsRecoveryOrder":
-			//parse an array of GUIDs
-			guidArray := make([]string, int(variableDataLength)/16)
-			for i := 0; i < int(variableDataLength)/16; i++ {
-				guidArray[i] = readGUID(buf)
-			}
-			uefiVariableData.GUIDArray = guidArray
-		case "PlatformLangCodes", "PlatformLang":
-			//read null terminated asciiString
-			if buf.Len() >= int(variableDataLength) {
-				uefiVariableData.StringContent = string(buf.Next(int(variableDataLength)))
-			}
-		default:
-			//if string is of type BootXXXX
-			if (strings.Contains(unicodeName, "Boot")) || strings.Contains(unicodeName, "PlatformRecovery") || strings.Contains(unicodeName, "Driver") { //for BootXXXX, PlatformRecoveryXXXX, and DriverXXXX entries
-				uefiVariableData.EFILoadOption = parseEFILoadOption(buf, int(variableDataLength))
-			} else {
-				hexString := (buf.Next(int(variableDataLength)))
-				uefiVariableData.VariableData = hexString
-			}
-		}
-
+	if buf.Len() < 2*int(unicodeNameLength) {
+		// return output
+		log.Error("incomplete UEFI Variable Data field")
+		return uefiVariableData
 	}
 
-	return nil
+	unicodeNameBuf := make([]uint16, unicodeNameLength)
+	binary.Read(buf, binary.LittleEndian, &unicodeNameBuf)
+	unicodeName := string(utf16.Decode(unicodeNameBuf))
+
+	if buf.Len() < int(variableDataLength) {
+		//just stop reading
+		log.Error("incomplete UEFI Variable Data field")
+		return uefiVariableData
+	}
+
+	//2. Part: put data into struct
+	uefiVariableData.VariableNameGUID = variableName
+	uefiVariableData.UnicodeName = unicodeName
+
+	//parse data of UEFI var
+	switch unicodeName {
+	case "PK", "KEK", "db", "dbr", "dbt", "dbx", "PKDefault", "KEKDefault", "dbDefault", "dbrDefault", "dbtDefault", "dbxDefault":
+		uefiVariableData.Signaturedb = parseEFISignaturedb(buf, int(variableDataLength))
+	case "BootOrder":
+		uefiVariableData.BootOrder = parseEFIBootOrder(buf, int(variableDataLength))
+	case "DriverOrder":
+		uefiVariableData.DriverOrder = parseEFIBootOrder(buf, int(variableDataLength))
+	case "BootNext":
+		uefiVariableData.BootNext = *parseSingleUint16(buf)
+	case "BootCurrent":
+		uefiVariableData.BootCurrent = *parseSingleUint16(buf)
+	case "BootOptionSupport":
+		uefiVariableData.BootOptionSupport = *parseSingleUint32(buf)
+	case "SignatureSupport", "OsRecoveryOrder":
+		//parse an array of GUIDs
+		guidArray := make([]string, int(variableDataLength)/16)
+		for i := 0; i < int(variableDataLength)/16; i++ {
+			guidArray[i] = readGUID(buf)
+		}
+		uefiVariableData.GUIDArray = guidArray
+	case "PlatformLangCodes", "PlatformLang":
+		//read null terminated asciiString
+		if buf.Len() >= int(variableDataLength) {
+			uefiVariableData.StringContent = string(buf.Next(int(variableDataLength)))
+		}
+	default:
+		//if string is of type BootXXXX
+		if (strings.Contains(unicodeName, "Boot")) || strings.Contains(unicodeName, "PlatformRecovery") || strings.Contains(unicodeName, "Driver") { //for BootXXXX, PlatformRecoveryXXXX, and DriverXXXX entries
+			uefiVariableData.EFILoadOption = parseEFILoadOption(buf, int(variableDataLength))
+		} else {
+			hexString := (buf.Next(int(variableDataLength)))
+			uefiVariableData.VariableData = hexString
+		}
+	}
+	return uefiVariableData
+	
 }
 
 func parseEFILoadOption(buf *bytes.Buffer, i int) *EFILoadOption {
