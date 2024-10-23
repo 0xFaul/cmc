@@ -364,6 +364,8 @@ func parseUefiVariableData(buf *bytes.Buffer) *UefiVariableData {
 		switch unicodeName {
 		case "PK", "KEK", "db", "dbr", "dbt", "dbx", "PKDefault", "KEKDefault", "dbDefault", "dbrDefault", "dbtDefault", "dbxDefault":
 			uefiVariableData.Signaturedb = parseEFISignaturedb(buf, int(variableDataLength))
+		case "SecureBoot":
+			uefiVariableData.VariableData = (buf.Next(int(variableDataLength))) // maybe add additional bool field to struct for SecureBoot
 		case "BootOrder":
 			uefiVariableData.BootOrder = parseEFIBootOrder(buf, int(variableDataLength))
 		case "DriverOrder":
